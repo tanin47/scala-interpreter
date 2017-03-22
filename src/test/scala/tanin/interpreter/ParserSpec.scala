@@ -14,6 +14,11 @@ class ParserSpec extends BaseSpec {
 
   it("parses Declare.") {
     val parser = new Parser
+
+    expectSuccess(
+      parser.parse(parser.script, "test = \"\"\"hel\nlo\"\"\""),
+      Seq(Declare(Identifier("test"), StringVal("hel\nlo")))
+    )
     expectSuccess(
       parser.parse(parser.script, """test = "hello""""),
       Seq(Declare(Identifier("test"), StringVal("hello")))

@@ -25,11 +25,11 @@ case class NewLine() extends Expr
 
 class Parser extends RegexParsers {
   def string: Parser[StringVal] = """"[^"]*"""".r ^^ { s => StringVal(s.substring(1, s.length - 1)) }
-  def multilineString: Parser[StringVal] = "(?s)\"\"\".*\"\"\"".r ^^ { s => StringVal(s.substring(3, s.length - 3)) }
+  def multilineString: Parser[StringVal] = "(?s)\"\"\"((?!\"\"\")[\\s\\S])*\"\"\"".r ^^ { s => StringVal(s.substring(3, s.length - 3)) }
 
   def newLine: Parser[NewLine] = "[ ]*\n".r ^^ { _ => NewLine() }
 
-  def value: Parser[Value] = (string | multilineString) ^^ identity
+  def value: Parser[Value] = (multilineString | string) ^^ identity
   def expr: Parser[Expr] = (chain | value) ^^ identity
   def args: Parser[Args] = expr ~ ("," ~ args).? ^^ {
     case first ~ Some(_ ~ next) => Args(first, Some(next))
