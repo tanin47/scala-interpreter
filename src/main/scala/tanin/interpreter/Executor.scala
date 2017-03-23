@@ -1,5 +1,7 @@
 package tanin.interpreter
 
+import java.lang.reflect.InvocationTargetException
+
 import scala.annotation.StaticAnnotation
 import scala.collection.mutable
 import scala.reflect.ClassTag
@@ -51,8 +53,12 @@ object Executor {
       new MethodVal(method.name.toString) {
         def apply(args: Value*) = {
           val convertedArgs = args.map(valueToNative)
-          val returnedValue = runtimeMirror(getClass.getClassLoader)
-            .reflect(underlying).reflectMethod(method).apply(convertedArgs: _*)
+          val returnedValue = try {
+            runtimeMirror(getClass.getClassLoader).reflect(underlying).reflectMethod(method).apply(convertedArgs: _*)
+          } catch {
+            case e: InvocationTargetException =>
+              throw e.getCause
+          }
 
           nativeToValue(returnedValue)
         }
@@ -78,11 +84,11 @@ class ProxyRefVal[U](val underlying: U)(implicit tag: TypeTag[U], classTag: Clas
 
 
 class Executor[T](
-                   val global: T
-                 )(
-                   implicit tag: TypeTag[T],
-                   classTag: ClassTag[T]
-                 ) {
+  val global: T
+)(
+  implicit tag: TypeTag[T],
+  classTag: ClassTag[T]
+) {
 
   private[this] val globalContext = Executor.getContext(global)
 
@@ -110,9 +116,9 @@ class Executor[T](
   }
 
   def executeInvoke(
-                     invoke: Invoke,
-                     parentOpt: Option[Value]
-                   ): Value = {
+    invoke: Invoke,
+    parentOpt: Option[Value]
+  ): Value = {
     val maybeMethod = dereference(invoke.name, parentOpt)
     val args = invoke.argsOpt.map { a => executeArgs(a) }.getOrElse(Seq.empty)
 
@@ -123,9 +129,9 @@ class Executor[T](
   }
 
   def executeChain(
-                    chain: Chain,
-                    parentOpt: Option[Value]
-                  ): Value = {
+    chain: Chain,
+    parentOpt: Option[Value]
+  ): Value = {
     val value = chain.expr match {
       case identifier: Identifier =>
         dereference(identifier, parentOpt)
@@ -143,9 +149,9 @@ class Executor[T](
   }
 
   def execute(
-               expr: Expr,
-               parentOpt: Option[Value]
-             ): Value = expr match {
+    expr: Expr,
+    parentOpt: Option[Value]
+  ): Value = expr match {
     case v: Value => v
 
     case Identifier(key) =>

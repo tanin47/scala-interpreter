@@ -36,6 +36,11 @@ class TestGlobal {
   def getSomeString(s: String): String = {
     s"$s-some-string"
   }
+
+  @Api
+  def raiseException(): Unit = {
+    throw new Exception("fake exception")
+  }
 }
 
 
@@ -56,5 +61,14 @@ class ExecutorSpec extends BaseSpec {
       """.stripMargin
     val script = parser.parse(parser.script, text)
     executor.run(script.get)
+  }
+
+  it("handles exception") {
+    val parser = new Parser
+    val executor = new Executor(new TestGlobal)
+    val script = parser.parse(parser.script, "raiseException()")
+
+    val exception = intercept[Exception]{ executor.run(script.get) }
+    exception.getMessage should be("fake exception")
   }
 }
