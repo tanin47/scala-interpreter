@@ -23,6 +23,13 @@ class TestGlobal {
   }
 
   @Api
+  def printTwiceLn(s: => String): Unit = {
+    scala.Predef.println(s)
+    scala.Predef.println(s)
+  }
+
+
+  @Api
   def printElem(elem: TestElement): Unit = {
     scala.Predef.println(elem.toString())
   }
@@ -33,8 +40,15 @@ class TestGlobal {
   }
 
   @Api
-  def getSomeString(s: String): String = {
+  def getSomeString(s: => String): String = {
+    scala.Predef.println("some-string")
     s"$s-some-string"
+  }
+
+  @Api
+  def getAnother(s: => String) = {
+    scala.Predef.println("another")
+    "another"
   }
 
   @Api
@@ -45,6 +59,17 @@ class TestGlobal {
 
 
 class ExecutorSpec extends BaseSpec {
+
+  it("executes call-by-name.") {
+    val parser = new Parser
+    val executor = new Executor(new TestGlobal)
+    val text =
+      """
+        |printTwiceLn(getSomeString(getAnother("another")))
+      """.stripMargin
+    val script = parser.parse(parser.script, text)
+    executor.run(script.get)
+  }
 
   it("executes Declare.") {
     val parser = new Parser

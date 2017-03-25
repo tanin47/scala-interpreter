@@ -13,7 +13,7 @@ abstract class RefVal extends Value {
   def get(key: String): Value
 }
 abstract class MethodVal(val name: String) extends Value {
-  def apply(args: Value*): Value
+  def apply(args: Seq[() => Value]): Value
 }
 
 case class Identifier(value: String) extends Expr

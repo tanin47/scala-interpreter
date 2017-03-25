@@ -31,7 +31,7 @@ class Context(val map: mutable.Map[String, Value]) {
 
 object Executor {
 
-  def valueToNative(v: Value): Any = v match {
+  def valueToNative(v: Value): AnyRef = v match {
     case StringVal(s) => s
     case p: ProxyRefVal[_] => p.underlying
     case other => throw new Exception(s"Can't convert $other to a Scala type.")
@@ -40,27 +40,44 @@ object Executor {
   def nativeToValue(s: Any): Value = s match {
     case s: String => StringVal(s)
     case e: Base => new ProxyRefVal(e)
-    case _: Unit => VoidVal()
     case other => throw new Exception(s"Can't convert $other to the interpreter type.")
   }
 
   def getApiMethods[U](underlying: U)(implicit tag: TypeTag[U], classTag: ClassTag[U]): Seq[MethodVal] = {
+
+    val javaMethods = underlying.getClass.getDeclaredMethods.map { m => m.getName -> m }.toMap
+
     currentMirror.classSymbol(underlying.getClass).toType.members.collect {
       case m: MethodSymbol => m
     }.filter { method =>
       method.annotations.exists(_.tree.tpe.finalResultType == typeOf[Api])
     }.map { method =>
       new MethodVal(method.name.toString) {
-        def apply(args: Value*) = {
-          val convertedArgs = args.map(valueToNative)
+        def apply(args: Seq[() => Value]) = {
+          val convertedArgs = method.paramLists.head.map(_.typeSignature).zip(args).map {
+            case (typeRef, arg) =>
+              if (typeRef.typeSymbol == definitions.ByNameParamClass) {
+                () => { valueToNative(arg()) }
+              } else {
+                valueToNative(arg())
+              }
+          }
+
+          // TODO: Support overloading methods.
+          val javaMethod = javaMethods(method.name.toString)
+
           val returnedValue = try {
-            runtimeMirror(getClass.getClassLoader).reflect(underlying).reflectMethod(method).apply(convertedArgs: _*)
+            javaMethod.invoke(underlying, convertedArgs: _*)
           } catch {
             case e: InvocationTargetException =>
               throw e.getCause
           }
 
-          nativeToValue(returnedValue)
+          if (javaMethod.getReturnType == java.lang.Void.TYPE) {
+            VoidVal()
+          } else {
+            nativeToValue(returnedValue)
+          }
         }
       }
     }.toSeq
@@ -76,7 +93,7 @@ object Executor {
 }
 
 
-class ProxyRefVal[U](val underlying: U)(implicit tag: TypeTag[U], classTag: ClassTag[U]) extends RefVal {
+class ProxyRefVal[U <: AnyRef](val underlying: U)(implicit tag: TypeTag[U], classTag: ClassTag[U]) extends RefVal {
   private[this] val context = Executor.getContext(underlying)
 
   def get(key: String): Value = context.get(key)
@@ -111,8 +128,8 @@ class Executor[T](
     }
   }
 
-  def executeArgs(args: Args): Seq[Value] = {
-    execute(args.expr, None) +: args.nextOpt.map { a => executeArgs(a) }.getOrElse(Seq.empty)
+  def executeArgs(args: Args): Seq[() => Value] = {
+    (() => execute(args.expr, None)) +: args.nextOpt.map { a => executeArgs(a) }.getOrElse(Seq.empty)
   }
 
   def executeInvoke(
@@ -120,10 +137,9 @@ class Executor[T](
     parentOpt: Option[Value]
   ): Value = {
     val maybeMethod = dereference(invoke.name, parentOpt)
-    val args = invoke.argsOpt.map { a => executeArgs(a) }.getOrElse(Seq.empty)
 
     maybeMethod match {
-      case method: MethodVal => method.apply(args:_*)
+      case method: MethodVal => method.apply(invoke.argsOpt.map { a => executeArgs(a) }.getOrElse(Seq.empty))
       case other => throw new Exception(s"Can't invoke ${invoke.name.value} because it isn't a method but $other.")
     }
   }
