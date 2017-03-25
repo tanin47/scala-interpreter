@@ -44,7 +44,6 @@ object Executor {
   }
 
   def getApiMethods[U](underlying: U)(implicit tag: TypeTag[U], classTag: ClassTag[U]): Seq[MethodVal] = {
-
     val javaMethods = underlying.getClass.getDeclaredMethods.map { m => m.getName -> m }.toMap
 
     currentMirror.classSymbol(underlying.getClass).toType.members.collect {
@@ -64,6 +63,8 @@ object Executor {
           }
 
           // TODO: Support overloading methods.
+          // TODO: Support named params.
+          // TODO: Support default params. http://www.scala-lang.org/old/sites/default/files/sids/rytz/Mon,%202009-11-09,%2017:29/named-args.pdf
           val javaMethod = javaMethods(method.name.toString)
 
           val returnedValue = try {
@@ -139,7 +140,10 @@ class Executor[T](
     val maybeMethod = dereference(invoke.name, parentOpt)
 
     maybeMethod match {
-      case method: MethodVal => method.apply(invoke.argsOpt.map { a => executeArgs(a) }.getOrElse(Seq.empty))
+      case method: MethodVal =>
+        method.apply(
+          args = invoke.argsOpt.map { a => executeArgs(a) }.getOrElse(Seq.empty)
+        )
       case other => throw new Exception(s"Can't invoke ${invoke.name.value} because it isn't a method but $other.")
     }
   }

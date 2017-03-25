@@ -28,7 +28,6 @@ class TestGlobal {
     scala.Predef.println(s)
   }
 
-
   @Api
   def printElem(elem: TestElement): Unit = {
     scala.Predef.println(elem.toString())
