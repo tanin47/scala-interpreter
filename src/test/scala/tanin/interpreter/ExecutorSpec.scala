@@ -44,9 +44,9 @@ class TestGlobal {
   }
 
   @Api
-  def getSomeString(s: => String): String = {
+  def getSomeString(s: => String, d: Int): String = {
     scala.Predef.println("some-string")
-    s"$s-some-string"
+    s"$s-$d-some-string"
   }
 
   @Api
@@ -94,7 +94,7 @@ class ExecutorSpec extends BaseSpec {
     val executor = new Executor(new TestGlobal)
     val text =
       """
-        |printTwiceLn(getSomeString(getAnother("another")))
+        |printTwiceLn(getSomeString(getAnother("another"), 123))
       """.stripMargin
     val script = parser.parse(parser.script, text)
     executor.run(script.get)
@@ -107,8 +107,8 @@ class ExecutorSpec extends BaseSpec {
       """
         |test = "hello"
         |println(test)
-        |println(getSomeString("s"))
-        |println(getSomeString(test))
+        |println(getSomeString("s", 11))
+        |println(getSomeString(test, 22))
         |println(getElem("someElem").toString())
         |printElem(getElem("someElem2"))
         |printElem(getElem("someElem3").child("child"))

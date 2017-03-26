@@ -41,6 +41,7 @@ class ParserSpec extends BaseSpec {
     )
   }
 
+
   it("parses Declare.") {
     val parser = new Parser
 
@@ -51,6 +52,10 @@ class ParserSpec extends BaseSpec {
     expectSuccess(
       parser.parse(parser.script, """test = "hello""""),
       Seq(Declare(Identifier("test"), StringVal("hello")))
+    )
+    expectSuccess(
+      parser.parse(parser.script, """test = 123"""),
+      Seq(Declare(Identifier("test"), IntVal(123)))
     )
   }
 
@@ -65,14 +70,14 @@ class ParserSpec extends BaseSpec {
   it("parses Invoke with multiple arguments.") {
     val parser = new Parser
     expectSuccess(
-      parser.parse(parser.script, """call("OK", "YES", aaa)"""),
+      parser.parse(parser.script, """call("OK", 123, aaa)"""),
       Seq(
         Chain(
           Invoke(
             Identifier("call"),
             Some(PositionalArgs(
               StringVal("OK"),
-              Some(PositionalArgs(StringVal("YES"), Some(PositionalArgs(Chain(Identifier("aaa"), None), None))))
+              Some(PositionalArgs(IntVal(123), Some(PositionalArgs(Chain(Identifier("aaa"), None), None))))
             ))
           ),
           None

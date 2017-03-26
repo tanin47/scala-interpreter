@@ -32,12 +32,14 @@ class Context(val map: mutable.Map[String, Value]) {
 object Executor {
 
   def valueToNative(v: Value): AnyRef = v match {
+    case IntVal(s) => Int.box(s)
     case StringVal(s) => s
     case p: ProxyRefVal[_] => p.underlying
     case other => throw new Exception(s"Can't convert $other to a Scala type.")
   }
 
   def nativeToValue(s: Any): Value = s match {
+    case s: Int => IntVal(s)
     case s: String => StringVal(s)
     case e: Base => new ProxyRefVal(e)
     case other => throw new Exception(s"Can't convert $other to the interpreter type.")
