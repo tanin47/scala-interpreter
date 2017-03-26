@@ -52,8 +52,8 @@ object Executor {
       method.annotations.exists(_.tree.tpe.finalResultType == typeOf[Api])
     }.map { method =>
       new MethodVal(method.name.toString) {
-        def apply(args: Seq[() => Value]) = {
-          val convertedArgs = method.paramLists.head.map(_.typeSignature).zip(args).map {
+        def apply(positionalArgs: Seq[() => Value], namedArgs: Map[Identifier, () => Value]) = {
+          val convertedArgs = method.paramLists.head.map(_.typeSignature).zip(positionalArgs).map {
             case (typeRef, arg) =>
               if (typeRef.typeSymbol == definitions.ByNameParamClass) {
                 () => { valueToNative(arg()) }
@@ -62,13 +62,34 @@ object Executor {
               }
           }
 
-          // TODO: Support overloading methods.
-          // TODO: Support named params.
-          // TODO: Support default params. http://www.scala-lang.org/old/sites/default/files/sids/rytz/Mon,%202009-11-09,%2017:29/named-args.pdf
           val javaMethod = javaMethods(method.name.toString)
+          val defaultArgs = convertedArgs.length.until(method.paramLists.head.size).map { index =>
+
+            println(method.paramLists.head.map(_.name.decodedName.toString))
+
+            if (method.paramLists.head(index).typeSignature.typeSymbol == definitions.ByNameParamClass) {
+              namedArgs.get(Identifier(method.paramLists.head(index).name.toString))
+                .map { arg =>
+                  () => valueToNative(arg())
+                }.getOrElse {
+                  // The default value of an argument is a method invocation that looks like fn$default$2 (the second argument).
+                  val defaultMethod = javaMethods(s"${method.name.toString}$$default$$${index + 1}")
+                  () => defaultMethod.invoke(underlying)
+                }
+            } else {
+              namedArgs.get(Identifier(method.paramLists.head(index).name.toString))
+                .map { arg =>
+                  valueToNative(arg())
+                }.getOrElse {
+                  // The default value of an argument is a method invocation that looks like fn$default$2 (the second argument).
+                  val defaultMethod = javaMethods(s"${method.name.toString}$$default$$${index + 1}")
+                  defaultMethod.invoke(underlying)
+                }
+            }
+          }
 
           val returnedValue = try {
-            javaMethod.invoke(underlying, convertedArgs: _*)
+            javaMethod.invoke(underlying, convertedArgs ++ defaultArgs: _*)
           } catch {
             case e: InvocationTargetException =>
               throw e.getCause
@@ -129,8 +150,14 @@ class Executor[T](
     }
   }
 
-  def executeArgs(args: Args): Seq[() => Value] = {
-    (() => execute(args.expr, None)) +: args.nextOpt.map { a => executeArgs(a) }.getOrElse(Seq.empty)
+  def executeArgs(args: Args): (Seq[() => Value], Map[Identifier, () => Value]) = args match {
+    case PositionalArgs(expr, nextOpt) =>
+      val (positionalArgs, namedArgs) = nextOpt.map { a => executeArgs(a) }.getOrElse((Seq.empty, Map.empty[Identifier, () => Value]))
+      ((() => execute(expr, None)) +: positionalArgs, namedArgs)
+
+    case NamedArgs(identifier, expr, nextOpt) =>
+      val (positionalArgs, namedArgs) = nextOpt.map { a => executeArgs(a) }.getOrElse((Seq.empty, Map.empty[Identifier, () => Value]))
+      (positionalArgs, Map((identifier, () => execute(expr, None))) ++ namedArgs)
   }
 
   def executeInvoke(
@@ -141,8 +168,10 @@ class Executor[T](
 
     maybeMethod match {
       case method: MethodVal =>
+        val (positionalArgs, namedArgs) = invoke.argsOpt.map { a => executeArgs(a) }.getOrElse((Seq.empty, Map.empty[Identifier, () => Value]))
         method.apply(
-          args = invoke.argsOpt.map { a => executeArgs(a) }.getOrElse(Seq.empty)
+          positionalArgs = positionalArgs,
+          namedArgs = namedArgs
         )
       case other => throw new Exception(s"Can't invoke ${invoke.name.value} because it isn't a method but $other.")
     }

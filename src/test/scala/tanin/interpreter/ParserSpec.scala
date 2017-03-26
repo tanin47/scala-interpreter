@@ -12,6 +12,35 @@ class ParserSpec extends BaseSpec {
     result.asInstanceOf[Parsers#Success[T]].result should be(expected)
   }
 
+  it("parses named args") {
+    val parser = new Parser
+
+    expectSuccess(
+      parser.parse(parser.script,"""test(first = "hello")"""),
+      Seq(
+        Chain(
+          Invoke(
+            Identifier("test"),
+            Some(NamedArgs(Identifier("first"), StringVal("hello"), None))),
+          None)
+      )
+    )
+    expectSuccess(
+      parser.parse(parser.script, """test("hello", second = "hello2")"""),
+      Seq(
+        Chain(
+          Invoke(
+            Identifier("test"),
+            Some(
+              PositionalArgs(
+                StringVal("hello"),
+                Some(NamedArgs(Identifier("second"), StringVal("hello2"), None))))),
+          None
+        )
+      )
+    )
+  }
+
   it("parses Declare.") {
     val parser = new Parser
 
@@ -41,9 +70,9 @@ class ParserSpec extends BaseSpec {
         Chain(
           Invoke(
             Identifier("call"),
-            Some(Args(
+            Some(PositionalArgs(
               StringVal("OK"),
-              Some(Args(StringVal("YES"), Some(Args(Chain(Identifier("aaa"), None), None))))
+              Some(PositionalArgs(StringVal("YES"), Some(PositionalArgs(Chain(Identifier("aaa"), None), None))))
             ))
           ),
           None
@@ -60,9 +89,9 @@ class ParserSpec extends BaseSpec {
         Chain(
           Invoke(
             Identifier("call"),
-            Some(Args(
+            Some(PositionalArgs(
               StringVal("OK"),
-              Some(Args(Chain(Invoke(Identifier("call2"), Some(Args(StringVal("YES"), None))), None), Some(Args(StringVal("NO"), None))))
+              Some(PositionalArgs(Chain(Invoke(Identifier("call2"), Some(PositionalArgs(StringVal("YES"), None))), None), Some(PositionalArgs(StringVal("NO"), None))))
             ))
           ),
           None
@@ -79,7 +108,7 @@ class ParserSpec extends BaseSpec {
         Chain(
           Identifier("call"),
           Some(Chain(
-            Invoke(Identifier("test"), Some(Args(StringVal("yes"), None))),
+            Invoke(Identifier("test"), Some(PositionalArgs(StringVal("yes"), None))),
             Some(Chain(
               Invoke(Identifier("test2"), None), None
             ))

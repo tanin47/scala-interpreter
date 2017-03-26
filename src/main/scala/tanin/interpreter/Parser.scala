@@ -9,15 +9,19 @@ sealed trait Value extends Expr
 
 case class StringVal(value: String) extends Value
 case class VoidVal() extends Value
+case class Identifier(value: String) extends Expr
+
 abstract class RefVal extends Value {
   def get(key: String): Value
 }
 abstract class MethodVal(val name: String) extends Value {
-  def apply(args: Seq[() => Value]): Value
+  def apply(positionalArgs: Seq[() => Value], namedArgs: Map[Identifier, () => Value]): Value
 }
 
-case class Identifier(value: String) extends Expr
-case class Args(expr: Expr, nextOpt: Option[Args]) extends Expr
+sealed abstract class Args
+case class PositionalArgs(expr: Expr, nextOpt: Option[Args]) extends Args
+case class NamedArgs(identifier: Identifier, expr: Expr, nextOpt: Option[NamedArgs]) extends Args
+
 case class Invoke(name: Identifier, argsOpt: Option[Args]) extends Expr
 case class Chain(expr: Expr, nextOpt: Option[Chain]) extends Expr
 case class Declare(name: Identifier, value: Expr) extends Expr
@@ -31,10 +35,15 @@ class Parser extends RegexParsers {
 
   def value: Parser[Value] = (multilineString | string) ^^ identity
   def expr: Parser[Expr] = (chain | value) ^^ identity
-  def args: Parser[Args] = expr ~ ("," ~ args).? ^^ {
-    case first ~ Some(_ ~ next) => Args(first, Some(next))
-    case first ~ None => Args(first, None)
+  def namedArgs: Parser[NamedArgs] = identifier ~ "=" ~expr ~ ("," ~ namedArgs).? ^^ {
+    case identifier ~ _ ~ value ~ Some(_ ~ next) => NamedArgs(identifier, value, Some(next))
+    case identifier ~ _ ~ value ~ None => NamedArgs(identifier, value, None)
   }
+  def positionalArgs: Parser[PositionalArgs] = expr ~ ("," ~ (namedArgs | positionalArgs)).? ^^ {
+    case first ~ Some(_ ~ next) => PositionalArgs(first, Some(next))
+    case first ~ None => PositionalArgs(first, None)
+  }
+  def args: Parser[Args] = (namedArgs | positionalArgs)  ^^ identity
 
   def identifier: Parser[Identifier] = "[0-9a-zA-Z-_]+".r ^^ Identifier.apply
   def invoke: Parser[Invoke] = identifier ~ "(" ~ args.? ~ ")" ^^ { case func ~ _ ~ argsOpt ~ _ => Invoke(func, argsOpt) }

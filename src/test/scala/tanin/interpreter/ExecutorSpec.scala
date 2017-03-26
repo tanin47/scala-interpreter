@@ -23,6 +23,11 @@ class TestGlobal {
   }
 
   @Api
+  def printDefault(s: String, d: String = "d", f: String = "f"): Unit = {
+    scala.Predef.println(s"$s $d $f")
+  }
+
+  @Api
   def printTwiceLn(s: => String): Unit = {
     scala.Predef.println(s)
     scala.Predef.println(s)
@@ -58,6 +63,31 @@ class TestGlobal {
 
 
 class ExecutorSpec extends BaseSpec {
+
+  it("executes named arguments") {
+    val parser = new Parser
+    val executor = new Executor(new TestGlobal)
+    val text =
+      """
+        |printDefault("s", f = "fff", d = "dd")
+        |printDefault(d = "d", s = "s")
+      """.stripMargin
+    val script = parser.parse(parser.script, text)
+    executor.run(script.get)
+  }
+
+  it("executes default arguments") {
+    val parser = new Parser
+    val executor = new Executor(new TestGlobal)
+    val text =
+      """
+        |printDefault("s")
+        |printDefault("s", "t")
+        |printDefault("s", "t", "u")
+      """.stripMargin
+    val script = parser.parse(parser.script, text)
+    executor.run(script.get)
+  }
 
   it("executes call-by-name.") {
     val parser = new Parser
